@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스마트 재활용 분리배출 안내 시스템 - 시뮬레이터</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+<!-- MobileNet 모델은 아래에서 TensorFlow.js Layers 모델로 직접 불러옵니다. -->
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--fg:#1f2937;--muted:#6b7280;--line:#d8dde3;--pri:#2563eb;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;font-family:Pretendard,"Malgun Gothic",-apple-system,sans-serif;background:var(--bg);color:var(--fg)}
+header{background:#14532d;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+header h1{font-size:20px;margin:0}
+header .sub{font-size:13px;opacity:.85}
+.wrap{display:grid;grid-template-columns:380px 1fr;gap:14px;padding:14px;max-width:1400px;margin:0 auto}
+@media(max-width:980px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.tabs{display:flex;gap:4px;margin-bottom:10px}
+.tab{flex:1;padding:8px;border:1px solid var(--line);background:#f9fafb;border-radius:6px;cursor:pointer;font-size:14px}
+.tab.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.pane{display:none}.pane.on{display:block}
+button.btn{padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font-size:14px}
+button.btn.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
+button.btn.red{background:var(--bad);color:#fff;border-color:var(--bad)}
+button.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+video,#preview,#snap{width:100%;border-radius:8px;background:#111;max-height:260px;object-fit:contain}
+#snap{display:none}
+.status{font-size:13px;color:var(--muted);margin-top:6px;min-height:18px}
+.mic{width:90px;height:90px;border-radius:50%;border:none;background:var(--pri);color:#fff;font-size:34px;cursor:pointer;display:block;margin:10px auto}
+.mic.on{background:var(--bad);animation:pulse 1s infinite}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
+.transcript{background:#f3f4f6;border-radius:6px;padding:10px;min-height:44px;font-size:15px}
+input[type=text]{flex:1;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:14px}
+.items{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.items button{padding:8px 4px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font-size:13px}
+.items button:hover{background:#eef2ff}
+.result{border:2px dashed var(--line);border-radius:8px;padding:10px;min-height:60px}
+.result .big{font-size:18px;font-weight:700}
+.pred{font-size:12px;color:var(--muted)}
+.bar{height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin:2px 0 6px}
+.bar>i{display:block;height:100%;background:var(--pri)}
+/* 하드웨어 영역 */
+.hw{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start}
+@media(max-width:700px){.hw{grid-template-columns:1fr}}
+.microbit{width:200px;background:#1f2937;border-radius:14px;padding:14px;color:#fff;text-align:center}
+.microbit .name{font-size:12px;opacity:.7;margin-bottom:6px}
+.matrix{display:grid;grid-template-columns:repeat(5,22px);gap:8px;justify-content:center;padding:10px;background:#111827;border-radius:8px}
+.led{width:22px;height:22px;border-radius:4px;background:#3b1111;transition:background .1s}
+.led.on{background:#ff2b2b;box-shadow:0 0 8px #ff2b2b}
+.mb-btns{display:flex;justify-content:space-between;margin-top:10px;font-size:12px}
+.mb-btns span{background:#374151;padding:4px 10px;border-radius:50%}
+.sensors{font-size:13px;margin-top:10px;text-align:left;line-height:1.7}
+.guide{border-left:6px solid var(--pri);padding:10px 14px;background:#f8fafc;border-radius:6px;min-height:150px}
+.guide h3{margin:0 0 6px;font-size:20px}
+.guide ol{margin:6px 0 0;padding-left:20px;line-height:1.7}
+.guide .note{font-size:13px;color:var(--warn);margin-top:6px}
+.bins{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:700px){.bins{grid-template-columns:repeat(2,1fr)}}
+.bin{position:relative;border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center;background:#fff;transition:outline .2s}
+.bin.active{outline:3px solid var(--pri)}
+.bin.full{outline:3px solid var(--bad);animation:shake .4s 3}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.can{position:relative;width:90px;height:110px;margin:22px auto 6px}
+.lid{position:absolute;top:-10px;left:-4px;width:98px;height:12px;border-radius:4px;transform-origin:4px 50%;transition:transform .6s}
+.body{position:absolute;inset:0;border:3px solid;border-top:none;border-radius:0 0 10px 10px;overflow:hidden;background:#fafafa}
+.fill{position:absolute;bottom:0;left:0;right:0;height:0;transition:height .5s;opacity:.55}
+.drop{position:absolute;left:50%;top:-70px;font-size:28px;transform:translateX(-50%);opacity:0;pointer-events:none}
+.drop.go{animation:drop 1s ease-in forwards}
+@keyframes drop{0%{top:-70px;opacity:1}80%{opacity:1}100%{top:60px;opacity:0}}
+.bin .nm{font-weight:700;font-size:14px}
+.bin .ct{font-size:12px;color:var(--muted)}
+.bin .badge{position:absolute;top:6px;right:6px;font-size:11px;padding:2px 6px;border-radius:4px;background:#e5e7eb}
+.bin.full .badge{background:var(--bad);color:#fff}
+.bin button{font-size:12px;padding:3px 8px;margin-top:4px;border:1px solid var(--line);background:#fff;border-radius:4px;cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:8px}
+.stat b{display:block;font-size:22px}
+.stat span{font-size:12px;color:var(--muted)}
+.log{max-height:180px;overflow:auto;font-size:13px;font-family:Consolas,monospace;background:#0f172a;color:#d1fae5;border-radius:6px;padding:8px}
+.log div{white-space:pre-wrap}
+.alert{display:none;background:var(--bad);color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:10px;font-weight:700}
+label.sw{font-size:13px;display:flex;align-items:center;gap:4px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>스마트 재활용 분리배출 안내 시스템</h1>
+    <div class="sub">이미지(카메라) · 마이크(음성) 인식 → micro:bit LED · 부저 · 서보모터 · 조도센서 시뮬레이션</div>
+  </div>
+  <div class="row">
+    <label class="sw"><input type="checkbox" id="optSound" checked>부저 소리</label>
+    <label class="sw"><input type="checkbox" id="optTTS" checked>음성 안내</label>
+    <label class="sw"><input type="checkbox" id="optAuto">인식 즉시 자동 배출</label>
+    <label class="sw">수거함 용량 <input type="range" id="optCap" min="3" max="10" value="5"><b id="capV">5</b>개</label>
+  </div>
+</header>
+
+<div class="wrap">
+<!-- ===== 왼쪽: 입력 ===== -->
+<div>
+  <div class="card">
+    <h2>1. 쓰레기 인식 입력</h2>
+    <div class="tabs">
+      <button class="tab on" data-p="pImg">이미지</button>
+      <button class="tab" data-p="pMic">마이크</button>
+      <button class="tab" data-p="pManual">직접 선택</button>
+    </div>
+
+    <div class="pane on" id="pImg">
+      <div class="row">
+        <button class="btn" id="camStart">카메라 켜기</button>
+        <button class="btn pri" id="camShot" disabled>촬영 후 인식</button>
+        <label class="btn" style="display:inline-block">이미지 업로드<input type="file" id="file" accept="image/*" hidden></label>
+      </div>
+      <video id="video" autoplay playsinline muted style="display:none"></video>
+      <canvas id="snap"></canvas>
+      <img id="preview" alt="" style="display:none">
+      <div class="status" id="imgStatus">AI 모델(MobileNet) 준비 중…</div>
+      <button class="btn" id="retryModel" type="button" style="display:none">AI 모델 다시 불러오기</button>
+    </div>
+
+    <div class="pane" id="pMic">
+      <button class="mic" id="micBtn" title="눌러서 말하기">🎤</button>
+      <div class="status" style="text-align:center" id="micStatus">버튼을 누르고 "페트병 버릴래", "우유팩이야"처럼 말해 보세요.</div>
+      <div class="transcript" id="transcript">…</div>
+      <div class="row">
+        <input type="text" id="textIn" placeholder="마이크가 없으면 여기에 입력 (예: 참치캔)">
+        <button class="btn pri" id="textBtn">인식</button>
+      </div>
+    </div>
+
+    <div class="pane" id="pManual">
+      <div class="items" id="items"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. 인식 결과</h2>
+    <div class="result" id="result"><span class="pred">아직 인식된 쓰레기가 없습니다.</span></div>
+  </div>
+</div>
+
+<!-- ===== 오른쪽: 하드웨어 시뮬레이션 ===== -->
+<div>
+  <div class="alert" id="alert"></div>
+  <div class="card">
+    <h2>3. micro:bit 출력 / 배출 안내</h2>
+    <div class="hw">
+      <div class="microbit">
+        <div class="name">micro:bit</div>
+        <div class="matrix" id="matrix"></div>
+        <div class="mb-btns"><span>A</span><span>B</span></div>
+        <div class="sensors">
+          부저: <b id="sBuzz">대기</b><br>
+          서보모터: <b id="sServo">0°</b><br>
+          조도센서: <b id="sLight">255</b><br>
+          상태: <b id="sState">대기 중</b>
+        </div>
+      </div>
+      <div class="guide" id="guide">
+        <h3>품목을 인식시켜 주세요</h3>
+        <div class="pred">이미지, 음성, 직접 선택 중 한 가지 방법으로 쓰레기를 입력하면 배출 방법을 안내합니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4. 분리배출함 <button class="btn" id="emptyAll">전체 비우기</button></h2>
+    <div class="bins" id="bins"></div>
+  </div>
+
+  <div class="card">
+    <h2>5. 통계 및 기록</h2>
+    <div class="stats">
+      <div class="stat"><b id="stTotal">0</b><span>총 배출 횟수</span></div>
+      <div class="stat"><b id="stPoint">0</b><span>환경 포인트</span></div>
+      <div class="stat"><b id="stWarn">0</b><span>가득 참 경고</span></div>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+</div>
+
+<script>
+/* ================= 데이터 ================= */
+const CATS = {
+  paper:   {name:"종이류",     color:"#b7894b", emoji:"📦", tone:[523,659], steps:["테이프·스프링·비닐 코팅 등 이물질 제거","물에 젖지 않게 펴서 차곡차곡 묶어 배출","우유팩·주스팩은 헹궈 말린 뒤 종이팩 전용함으로"]},
+  plastic: {name:"플라스틱",   color:"#2563eb", emoji:"🧴", tone:[587,784], steps:["내용물을 비우고 물로 헹구기","라벨(비닐) 떼기","찌그러뜨려 부피 줄이고 뚜껑 닫기","투명 페트병은 별도 수거함으로"]},
+  can:     {name:"캔·고철",    color:"#6b7280", emoji:"🥫", tone:[659,880], steps:["내용물을 비우고 헹구기","가능하면 압착해서 부피 줄이기","부탄가스·스프레이 캔은 화기 없는 환기 장소에서 내용물을 완전히 비우고 지자체 배출 기준을 확인"]},
+  glass:   {name:"유리병",     color:"#059669", emoji:"🍾", tone:[698,932], steps:["뚜껑 분리(뚜껑은 재질별로 배출)","내용물을 비우고 헹구기","깨진 유리·거울·도자기는 일반쓰레기(신문지에 싸서)"]},
+  vinyl:   {name:"비닐류",     color:"#9333ea", emoji:"🛍️", tone:[440,554], steps:["음식물·이물질을 털고 헹구기","흩날리지 않게 투명 봉투에 모아 배출","이물질이 지워지지 않으면 일반쓰레기"]},
+  styro:   {name:"스티로폼",   color:"#0ea5e9", emoji:"⬜", tone:[494,622], steps:["테이프·운송장 스티커 제거","내용물·이물질 없이 깨끗하게","색깔·코팅·음식물 오염된 것은 일반쓰레기"]},
+  food:    {name:"음식물",     color:"#ca8a04", emoji:"🍌", tone:[392,494], steps:["물기를 최대한 제거","뼈·조개껍데기·씨앗·티백은 일반쓰레기","음식물 전용 수거함에 배출"]},
+  general: {name:"일반쓰레기", color:"#374151", emoji:"🗑️", tone:[330,262], steps:["종량제 봉투에 담아 배출","재활용이 안 되는 품목인지 한 번 더 확인"]}
+};
+const ORDER = ["paper","plastic","can","glass","vinyl","styro","food","general"];
+
+/* 음성/텍스트 키워드 사전 [키워드, 분류, 추가 안내] - 긴 키워드 우선 매칭 */
+const KEYWORDS = [
+  ["깨진유리","general","깨진 유리는 신문지에 싸서 종량제 봉투에 버려요."],["거울","general"],["도자기","general"],["사기그릇","general"],
+  ["치킨뼈","general","뼈는 음식물이 아니라 일반쓰레기입니다."],["닭뼈","general","뼈는 음식물이 아니라 일반쓰레기입니다."],["생선뼈","general"],
+  ["조개껍데기","general","조개껍데기는 일반쓰레기입니다."],["달걀껍데기","general","달걀 껍데기는 일반쓰레기입니다."],["계란껍질","general"],["티백","general"],["복숭아씨","general"],
+  ["휴지","general","휴지는 재활용되지 않습니다."],["티슈","general"],["영수증","general","감열지 영수증은 종이로 재활용되지 않습니다."],["기저귀","general"],["칫솔","general"],["볼펜","general"],["마스크","general"],["물티슈","general"],["코팅종이","general"],["사진","general"],
+  ["우유팩","paper","종이팩은 일반 종이와 따로 모아 주세요."],["주스팩","paper"],["종이팩","paper"],["종이컵","paper","종이컵은 헹궈서 종이팩과 함께 배출합니다."],["신문","paper"],["박스","paper"],["상자","paper"],["택배상자","paper","테이프와 송장을 떼 주세요."],["책","paper"],["공책","paper"],["노트","paper"],["종이","paper"],["잡지","paper"],["전단지","paper"],
+  ["투명페트병","plastic","투명 페트병은 라벨을 떼고 별도 수거함에 배출합니다."],["페트병","plastic"],["생수병","plastic"],["음료수병","plastic"],["플라스틱","plastic"],["요구르트병","plastic"],["샴푸통","plastic"],["세제통","plastic"],["배달용기","plastic","음식물을 깨끗이 씻은 후 배출해요."],["반찬통","plastic"],["컵홀더","paper"],["빨대","general","빨대는 크기가 작아 일반쓰레기로 버려요."],
+  ["콜라캔","can"],["사이다캔","can"],["음료캔","can"],["맥주캔","can"],["참치캔","can"],["통조림","can"],["부탄가스","can","반드시 가스를 완전히 뺀 뒤 배출하세요."],["스프레이","can","가스를 완전히 뺀 뒤 배출하세요."],["캔","can"],["고철","can"],["냄비","can"],["프라이팬","can"],["철","can"],["알루미늄","can"],
+  ["소주병","glass","빈 병 보증금 대상이면 마트에 반환할 수 있어요."],["맥주병","glass","빈 병 보증금 대상이면 마트에 반환할 수 있어요."],["와인병","glass"],["음료병","glass"],["유리병","glass"],["잼병","glass"],["유리","glass"],
+  ["과자봉지","vinyl"],["라면봉지","vinyl"],["비닐봉지","vinyl"],["뽁뽁이","vinyl"],["에어캡","vinyl"],["비닐","vinyl"],["봉지","vinyl"],["랩","vinyl"],
+  ["컵라면용기","styro","컵라면 용기는 깨끗이 씻었을 때만 재활용됩니다."],["스티로폼","styro"],["아이스박스","styro"],["완충재","styro"],
+  ["바나나껍질","food"],["과일껍질","food"],["사과","food"],["바나나","food"],["귤","food"],["밥","food"],["반찬","food"],["음식물","food"],["음식","food"],["야채","food"],["채소","food"],["수박","food"],["김치","food"]
+].sort((a,b)=>b[0].length-a[0].length);
+
+/* MobileNet(영문 라벨) → 분류 규칙 */
+const IMG_RULES = [
+  [/plastic bag|packet|shopping bag/i,"vinyl"],
+  [/water bottle|pop bottle|soda bottle|pill bottle|water jug|lotion|soap dispenser|bucket|plastic/i,"plastic"],
+  [/beer bottle|wine bottle|whiskey|red wine|beer glass|goblet|vase|perfume|jar/i,"glass"],
+  [/\bcan\b|tin|milk can|frying pan|caldron|wok|ladle|spatula|pot\b|cocktail shaker/i,"can"],
+  [/carton|envelope|book|menu|comic|notebook|paper|crossword|newspaper|binder|mailbag|box/i,"paper"],
+  [/banana|orange|lemon|apple|granny smith|strawberry|pineapple|pomegranate|fig|cucumber|broccoli|cauliflower|zucchini|corn|mushroom|pizza|hotdog|burrito|bagel|pretzel|carbonara|meat loaf|potpie|head cabbage|bell pepper|custard apple|jackfruit/i,"food"],
+  [/toilet tissue|paper towel|diaper|mask|ballpoint|pencil|toothbrush|band aid/i,"general"]
+];
+const KO_LABEL = {"water bottle":"생수병","pop bottle":"음료 페트병","beer bottle":"맥주병","wine bottle":"와인병","carton":"종이팩/상자","envelope":"종이 봉투","plastic bag":"비닐봉지","packet":"과자 봉지","banana":"바나나","orange":"오렌지","lemon":"레몬","Granny Smith":"사과","toilet tissue":"휴지","paper towel":"키친타월","pill bottle":"약통","water jug":"물통","beer glass":"유리잔","comic book":"만화책","book jacket":"책","notebook":"노트북/공책","menu":"메뉴판(종이)","frying pan":"프라이팬","milk can":"우유 캔"};
+
+/* LED 패턴 (5x5) */
+const P = {
+  "1":"00100,01100,00100,00100,01110","2":"11100,00010,01100,10000,11110","3":"11110,00010,00100,10010,01100","4":"00110,01010,10010,11111,00010",
+  "5":"11111,10000,11110,00001,11110","6":"00010,00100,01110,10001,01110","7":"11111,00010,00100,01000,10000","8":"01110,10001,01110,10001,01110",
+  check:"00000,00001,00010,10100,01000", x:"10001,01010,00100,01010,10001", q:"01110,10001,00110,00000,00100",
+  heart:"01010,11111,11111,01110,00100", smile:"00000,01010,00000,10001,01110", none:"00000,00000,00000,00000,00000"
+};
+
+/* ================= 상태 ================= */
+const st = {cap:5, fill:{}, total:0, point:0, warn:0, busy:false, pending:null};
+ORDER.forEach(k=>st.fill[k]=0);
+const $ = id=>document.getElementById(id);
+
+/* ================= micro:bit 출력 ================= */
+const matrix=$("matrix"); const leds=[];
+for(let i=0;i<25;i++){const d=document.createElement("div");d.className="led";matrix.appendChild(d);leds.push(d);}
+function showLED(name){const rows=(P[name]||P.none).split(",");rows.forEach((r,y)=>[...r].forEach((c,x)=>leds[y*5+x].classList.toggle("on",c==="1")));}
+showLED("smile");
+
+let actx=null;
+function beep(freqs,dur=0.18){
+  if(!$("optSound").checked) return;
+  actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+  let t=actx.currentTime;
+  freqs.forEach(f=>{const o=actx.createOscillator(),g=actx.createGain();o.type="square";o.frequency.value=f;g.gain.value=0.07;o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+dur);t+=dur+0.04;});
+  $("sBuzz").textContent=freqs.join("Hz → ")+"Hz";
+  setTimeout(()=>$("sBuzz").textContent="대기",(dur+0.05)*freqs.length*1000+200);
+}
+function speak(text){
+  if(!$("optTTS").checked||!window.speechSynthesis) return;
+  speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang="ko-KR"; u.rate=1.05; speechSynthesis.speak(u);
+}
+function log(msg){const d=document.createElement("div");d.textContent="["+new Date().toLocaleTimeString()+"] "+msg;$("log").prepend(d);}
+
+/* ================= 수거함 ================= */
+function renderBins(){
+  $("bins").innerHTML="";
+  ORDER.forEach((k,i)=>{
+    const c=CATS[k];
+    const b=document.createElement("div");b.className="bin";b.id="bin_"+k;
+    b.innerHTML=`<span class="badge">${i+1}번</span>
+      <div class="can"><div class="lid" id="lid_${k}" style="background:${c.color}"></div>
+      <div class="body" style="border-color:${c.color}"><div class="fill" id="fill_${k}" style="background:${c.color}"></div></div>
+      <div class="drop" id="drop_${k}">${c.emoji}</div></div>
+      <div class="nm" style="color:${c.color}">${c.name}</div>
+      <div class="ct" id="ct_${k}">0 / ${st.cap}</div>
+      <button data-k="${k}">비우기</button>`;
+    b.querySelector("button").onclick=()=>emptyBin(k);
+    $("bins").appendChild(b);
+  });
+  ORDER.forEach(updateBin);
+}
+function updateBin(k){
+  const r=Math.min(st.fill[k]/st.cap,1);
+  $("fill_"+k).style.height=(r*100)+"%";
+  $("ct_"+k).textContent=st.fill[k]+" / "+st.cap+(st.fill[k]>=st.cap?" (가득 참)":"");
+  $("bin_"+k).classList.toggle("full",st.fill[k]>=st.cap);
+}
+function lightValue(k){return Math.round(255*(1-Math.min(st.fill[k]/st.cap,1)));} // 쌓일수록 어두워짐
+function emptyBin(k){st.fill[k]=0;updateBin(k);log(`${CATS[k].name} 수거함을 비웠습니다.`);checkAlert();}
+function checkAlert(){
+  const full=ORDER.filter(k=>st.fill[k]>=st.cap);
+  $("alert").style.display=full.length?"block":"none";
+  $("alert").textContent="가득 찬 수거함: "+full.map(k=>CATS[k].name).join(", ")+" → 관리자에게 수거를 요청하세요.";
+}
+
+/* ================= 배출 처리 (핵심 로직) ================= */
+function processItem(k,item,source,note){
+  if(st.busy) return;
+  const c=CATS[k], idx=ORDER.indexOf(k);
+  ORDER.forEach(x=>$("bin_"+x).classList.remove("active"));
+  $("bin_"+k).classList.add("active");
+  $("guide").style.borderLeftColor=c.color;
+  $("guide").innerHTML=`<h3 style="color:${c.color}">${c.emoji} ${item} → ${idx+1}번 ${c.name}</h3>
+    <div class="pred">입력 방식: ${source}</div><ol>${c.steps.map(s=>"<li>"+s+"</li>").join("")}</ol>
+    ${note?`<div class="note">※ ${note}</div>`:""}`;
+
+  // 가득 참 → 배출 차단
+  if(st.fill[k]>=st.cap){
+    st.warn++;$("stWarn").textContent=st.warn;
+    showLED("x");beep([880,440,880,440],0.15);
+    $("sState").textContent="가득 참 - 뚜껑 잠김";$("sLight").textContent=lightValue(k);
+    $("guide").innerHTML+=`<div class="note" style="color:var(--bad)">⚠ ${c.name} 수거함이 가득 차서 뚜껑이 열리지 않습니다. 관리자에게 알려 주세요.</div>`;
+    speak(`${c.name} 수거함이 가득 찼습니다. 관리자에게 알려 주세요.`);
+    log(`[경고] ${item} 배출 시도 - ${c.name} 수거함 가득 참`);
+    checkAlert();return;
+  }
+
+  st.busy=true;
+  showLED(String(idx+1)); beep(c.tone);
+  speak(`${item}은 ${idx+1}번 ${c.name} 수거함입니다. ${c.steps[0]}. ${note||""}`);
+  $("sState").textContent="뚜껑 여는 중";
+  log(`${source} → "${item}" = ${c.name} (${idx+1}번)`);
+
+  setTimeout(()=>{ // 서보 90도 열림
+    $("lid_"+k).style.transform="rotate(-90deg)";$("sServo").textContent="90° (열림)";$("sState").textContent="투입 대기";
+    const d=$("drop_"+k);d.classList.remove("go");void d.offsetWidth;d.classList.add("go");
+  },600);
+  setTimeout(()=>{ // 적재 + 조도센서 측정
+    st.fill[k]++;updateBin(k);
+    $("sLight").textContent=lightValue(k);
+  },1700);
+  setTimeout(()=>{ // 서보 0도 닫힘
+    $("lid_"+k).style.transform="rotate(0deg)";$("sServo").textContent="0° (닫힘)";
+    st.total++;st.point+=10;$("stTotal").textContent=st.total;$("stPoint").textContent=st.point;
+    showLED("check");beep([784,1046],0.12);
+    if(st.fill[k]>=st.cap){
+      $("sState").textContent="가득 참 감지!";st.warn++;$("stWarn").textContent=st.warn;
+      setTimeout(()=>{showLED("x");beep([880,440,880,440],0.15);speak(`${c.name} 수거함이 가득 찼습니다.`);},700);
+      log(`[조도센서] ${c.name} 수거함 값 ${lightValue(k)} → 가득 참`);
+    } else $("sState").textContent="배출 완료 (+10점)";
+    checkAlert();
+    st.busy=false;
+    setTimeout(()=>{if(!st.busy){showLED("smile");$("sState").textContent="대기 중";}},2500);
+  },3200);
+}
+
+/* 인식 결과 표시 + 확인 */
+function showResult(cands,source,item,note){
+  // cands: [{k, label, prob}]
+  const r=$("result");
+  if(!cands.length){
+    showLED("q");beep([300,250]);
+    r.innerHTML=`<div class="big" style="color:var(--warn)">인식하지 못했습니다</div><div class="pred">${item?`입력: "${item}" — `:""}'직접 선택' 탭에서 고르거나 다시 시도해 주세요.</div>`;
+    speak("무엇인지 잘 모르겠어요. 직접 선택해 주세요.");
+    log(`${source} → 인식 실패${item?` ("${item}")`:""}`);return;
+  }
+  const best=cands[0];
+  st.pending={k:best.k,item:best.label,source,note};
+  r.innerHTML=`<div class="big">${CATS[best.k].emoji} ${best.label} → <span style="color:${CATS[best.k].color}">${CATS[best.k].name}</span></div>
+    ${best.prob!=null?`<div class="pred">신뢰도 ${(best.prob*100).toFixed(1)}%</div><div class="bar"><i style="width:${best.prob*100}%"></i></div>`:""}
+    <div class="row"><button class="btn pri" id="okBtn">이대로 배출</button>
+    ${ORDER.filter(x=>x!==best.k).map(x=>`<button class="btn alt" data-k="${x}" style="font-size:12px;padding:4px 8px">${CATS[x].name}</button>`).join("")}</div>
+    ${cands.length>1?`<div class="pred">다른 후보: ${cands.slice(1).map(c=>c.label+"("+CATS[c.k].name+(c.prob!=null?", "+(c.prob*100).toFixed(0)+"%":"")+")").join(", ")}</div>`:""}`;
+  $("okBtn").onclick=()=>{const p=st.pending;processItem(p.k,p.item,p.source,p.note);};
+  r.querySelectorAll(".alt").forEach(b=>b.onclick=()=>{log(`사용자 수정: ${best.label} → ${CATS[b.dataset.k].name}`);processItem(b.dataset.k,best.label,source+" (수정)",null);});
+  if(best.prob!=null && best.prob<0.3){speak("확실하지 않아요. 맞는지 확인해 주세요.");showLED("q");}
+  if($("optAuto").checked && (best.prob==null||best.prob>=0.3)) processItem(best.k,best.label,source,note);
+}
+
+/* ================= 이미지 인식 (MobileNet) ================= */
+// Kaggle/TF Hub 리디렉션 대신 TensorFlow.js 예제의 공개 Layers 모델을 사용합니다.
+const MODEL_URL = "https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_1.0_224/model.json";
+const LABELS_URL = "https://cdn.jsdelivr.net/gh/tensorflow/tfjs-examples@master/electron/imagenet_classes.js";
+let model=null, labels=null, loadingModel=false;
+async function loadModel(){
+  if(loadingModel || model) return;
+  loadingModel=true;
+  $("retryModel").style.display="none";
+  $("imgStatus").textContent="AI 모델을 불러오는 중입니다. 잠시 기다려 주세요…";
+  try{
+    if(typeof tf==="undefined") throw new Error("TensorFlow.js 라이브러리 로드 실패. 인터넷 연결을 확인하고 페이지를 새로고침하세요.");
+    // 이 모델은 GraphModel이 아닌 LayersModel이므로 loadLayersModel을 사용합니다.
+    const loadedLabels=await import(LABELS_URL);
+    if(!loadedLabels.IMAGENET_CLASSES || Object.keys(loadedLabels.IMAGENET_CLASSES).length!==1000) throw new Error("이미지 분류 이름을 불러오지 못했습니다.");
+    labels=loadedLabels.IMAGENET_CLASSES;
+    model=await tf.loadLayersModel(MODEL_URL);
+    $("imgStatus").textContent="AI 모델 준비 완료. 카메라로 촬영하거나 이미지를 다시 올려 주세요.";
+  }catch(e){
+    model=null;
+    console.error("AI 모델 로드 실패:",e);
+    $("imgStatus").textContent="AI 모델을 불러오지 못했습니다. 인터넷이나 학교·기관의 네트워크 차단을 확인하고 다시 시도하세요. 음성·텍스트·직접 선택은 이용할 수 있습니다.";
+    $("retryModel").style.display="inline-block";
+  }finally{
+    loadingModel=false;
+  }
+}
+$("retryModel").onclick=loadModel;
+// TensorFlow.js 공식 예제와 동일하게 0~1 범위로 정규화하고, 상위 결과를 표시합니다.
+async function predictImage(el, topK=5){
+  const scores=tf.tidy(()=>{
+    const image=tf.browser.fromPixels(el).toFloat();
+    const input=tf.image.resizeBilinear(image,[224,224]).div(255).expandDims(0);
+    return model.predict(input).reshape([1000]);
+  });
+  try{
+    const values=await scores.data();
+    return Array.from(values,(probability,index)=>({className:labels[index]||("클래스 "+index),probability}))
+      .sort((a,b)=>b.probability-a.probability).slice(0,topK);
+  }finally{scores.dispose();}
+}
+function mapLabel(className){
+  for(const [re,k] of IMG_RULES) if(re.test(className)) return k;
+  return null;
+}
+async function classifyEl(el){
+  if(!model){$("imgStatus").textContent="모델이 아직 준비되지 않았습니다.";return;}
+  $("imgStatus").textContent="인식 중…";showLED("q");
+  let preds;
+  try{preds=await predictImage(el,5);}
+  catch(e){console.error("이미지 인식 오류:",e);$("imgStatus").textContent="이미지 인식에 실패했습니다. 다른 사진으로 다시 시도해 주세요.";return;}
+  $("imgStatus").textContent="원본 예측: "+preds.map(p=>p.className.split(",")[0]+" "+(p.probability*100).toFixed(0)+"%").join(" / ");
+  const cands=[];
+  preds.forEach(p=>{
+    const k=mapLabel(p.className); if(!k) return;
+    const en=p.className.split(",")[0].trim();
+    const ex=cands.find(c=>c.k===k);
+    if(ex) ex.prob+=p.probability; else cands.push({k,label:KO_LABEL[en]||en,prob:p.probability});
+  });
+  cands.sort((a,b)=>b.prob-a.prob);
+  showResult(cands,"이미지 인식");
+}
+let stream=null;
+$("camStart").onclick=async()=>{
+  try{
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;$("video").style.display="none";$("camShot").disabled=true;$("camStart").textContent="카메라 켜기";return;}
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+    $("video").srcObject=stream;$("video").style.display="block";$("preview").style.display="none";$("snap").style.display="none";
+    $("camShot").disabled=false;$("camStart").textContent="카메라 끄기";
+  }catch(e){$("imgStatus").textContent="카메라를 사용할 수 없습니다: "+e.message+" (이미지 업로드를 이용하세요)";}
+};
+$("camShot").onclick=()=>{
+  const v=$("video"),c=$("snap");c.width=v.videoWidth;c.height=v.videoHeight;
+  c.getContext("2d").drawImage(v,0,0);c.style.display="block";
+  beep([1200],0.05);classifyEl(c);
+};
+$("file").onchange=e=>{
+  const f=e.target.files[0];if(!f) return;
+  const img=$("preview");img.onload=()=>classifyEl(img);
+  img.src=URL.createObjectURL(f);img.style.display="block";$("snap").style.display="none";
+};
+
+/* ================= 음성 인식 ================= */
+function matchText(text){
+  const t=text.replace(/\s/g,"");
+  const found=[];
+  for(const [kw,k,note] of KEYWORDS){
+    if(t.includes(kw) && !found.some(f=>f.label.includes(kw))) found.push({k,label:kw,prob:null,note});
+  }
+  return found;
+}
+function handleText(text,source){
+  const f=matchText(text);
+  showResult(f,source,text,f[0]&&f[0].note);
+}
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,listening=false;
+if(SR){
+  rec=new SR();rec.lang="ko-KR";rec.interimResults=true;rec.maxAlternatives=1;
+  rec.onresult=e=>{
+    let txt="";for(let i=e.resultIndex;i<e.results.length;i++) txt+=e.results[i][0].transcript;
+    $("transcript").textContent=txt;
+    if(e.results[e.results.length-1].isFinal) handleText(txt,"음성 인식");
+  };
+  rec.onend=()=>{listening=false;$("micBtn").classList.remove("on");$("micStatus").textContent="버튼을 눌러 다시 말할 수 있습니다.";};
+  rec.onerror=e=>{$("micStatus").textContent="음성 인식 오류: "+e.error;};
+}else{
+  $("micStatus").textContent="이 브라우저는 음성 인식을 지원하지 않습니다(크롬 권장). 아래 입력창을 이용하세요.";
+}
+$("micBtn").onclick=()=>{
+  if(!rec) return;
+  if(listening){rec.stop();return;}
+  listening=true;$("micBtn").classList.add("on");$("micStatus").textContent="듣는 중… 말해 보세요.";$("transcript").textContent="…";
+  beep([880],0.08);rec.start();
+};
+$("textBtn").onclick=()=>{const v=$("textIn").value.trim();if(v){$("transcript").textContent=v;handleText(v,"텍스트 입력");}};
+$("textIn").onkeydown=e=>{if(e.key==="Enter")$("textBtn").click();};
+
+/* ================= 직접 선택 ================= */
+const SAMPLE=[["페트병","plastic"],["우유팩","paper","종이팩 전용함이 따로 있으면 그곳에!"],["택배상자","paper"],["콜라캔","can"],["참치캔","can"],["소주병","glass"],["과자봉지","vinyl"],["스티로폼","styro"],["바나나껍질","food"],["치킨뼈","general","뼈는 일반쓰레기입니다."],["휴지","general"],["깨진유리","general","신문지에 싸서 버려요."]];
+SAMPLE.forEach(([n,k,note])=>{const b=document.createElement("button");b.textContent=CATS[k].emoji+" "+n;b.onclick=()=>{showResult([{k,label:n,prob:null}],"직접 선택",n,note);if(!$("optAuto").checked)processItem(k,n,"직접 선택",note);};$("items").appendChild(b);});
+
+/* ================= 기타 UI ================= */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));
+  document.querySelectorAll(".pane").forEach(x=>x.classList.remove("on"));
+  t.classList.add("on");$(t.dataset.p).classList.add("on");
+});
+$("optCap").oninput=e=>{st.cap=+e.target.value;$("capV").textContent=st.cap;ORDER.forEach(updateBin);checkAlert();};
+$("emptyAll").onclick=()=>{ORDER.forEach(k=>st.fill[k]=0);ORDER.forEach(updateBin);checkAlert();showLED("heart");beep([523,659,784]);log("전체 수거함을 비웠습니다.");};
+
+renderBins();log("시스템 시작 - micro:bit 연결됨(시뮬레이션)");loadModel();
+</script>
+</body>
+</html>
